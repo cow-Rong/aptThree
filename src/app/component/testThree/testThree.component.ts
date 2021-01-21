@@ -52,7 +52,7 @@ export class TestThreeComponent implements OnInit {
     this.animate();
     // 构建辅助线
     const axesHelper = new THREE.AxesHelper(1000);
-    this.scene.add(axesHelper);
+    // this.scene.add(axesHelper);
     // 网格
     const gridHelper = new THREE.GridHelper(1000, 1000);
     // this.scene.add(gridHelper);
@@ -90,8 +90,8 @@ export class TestThreeComponent implements OnInit {
     this.bloomComposer.addPass(bloomPass);
 
     // 生成曲线
-    const startVec = new THREE.Vector3(50, 0, 0);
-    const endVec = new THREE.Vector3(-20, 30, 30);
+    // const startVec = new THREE.Vector3(50, 0, 0);
+    // const endVec = new THREE.Vector3(-20, 30, 30);
     // this.generateLine(startVec, endVec, 'y', 10);
 
     // 添加模型
@@ -106,19 +106,116 @@ export class TestThreeComponent implements OnInit {
   parseData() {
     for (const i in this.data) {
       if (this.data[i].type === 'plant') {
-        this.initObject(this.data[i].size, this.data[i].position, this.data[i].bgcolor, this.data[i].opacity, this.data[i].text);
+        this.initPlant(this.data[i].size, this.data[i].position, this.data[i].bgcolor, this.data[i].opacity, this.data[i].textdir, this.data[i].text);
       } else if (this.data[i].type === 'block') {
-        this.initObject(this.data[i].size, this.data[i].position, this.data[i].bgcolor, this.data[i].opacity, this.data[i].text);
+        this.initBlock(this.data[i].size, this.data[i].position, this.data[i].bgcolor, this.data[i].opacity, this.data[i].textdir, this.data[i].text);
       } else if (this.data[i].type === 'modele') {
 
+      } else if (this.data[i].type === 'verticalLine') {
+        this.generateVLine(this.data[i].from, this.data[i].to, this.data[i].dir, this.data[i].dis ? this.data[i].dis : 40);
       } else if (this.data[i].type === 'line') {
-
+        this.generateLine(this.data[i].from, this.data[i].to, this.data[i].dir);
       }
     }
   }
 
+  initBlock(size, position, bgcolor, opacity, textdir?, text?) {
+    const geometry = new THREE.BoxGeometry(...size);
+    const material = new THREE.MeshLambertMaterial({
+      color: bgcolor,
+      opacity: opacity || 0.7,
+      side: THREE.DoubleSide, // THREE.FrontSide 正面，THREE.BackSide 反面，THREE.DoubleSide 双面
+      transparent: true,
+      wireframe: false,           // 是否渲染线而非面 默认false
+      // map: this.initCanvMtl(text)
+    });
+    const cube = new THREE.Mesh(geometry, material);
+    cube.rotation.x += Math.PI / 2;
+    cube.position.set(position[0], position[1], position[2]);
+    this.scene.add(cube);
+    // 创建粒子，便于标识点击位置,Sprite粒子会跟着摄像头变，有点乱，直接躺下固定吧
+    // const particle = new THREE.Sprite(this.initParMtl(text));
+    // particle.position.set(cube.position.x, cube.position.y + 2, cube.position.z);
+    // particle.scale.set(20, 20, 1);
+    // this.scene.add(particle);
+
+    // TextGeometry文字方案
+    // const txtGeo = new THREE.TextGeometry('hello world', {
+    //   // font: 'Bold 50px Microsoft YaHei',
+    //   size: 0.8,
+    //   height: 0.1,
+    //   curveSegments: 12,
+    //   bevelEnabled: true,
+    //   bevelThickness: 0.1,
+    //   bevelSize: 0.05,
+    //   bevelSegments: 3
+    // });
+    // const txtMater = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+    // const txtMesh = new THREE.Mesh(txtGeo, txtMater);
+    // txtMesh.position.set(cube.position.x, cube.position.y + 2, cube.position.z);
+    // this.scene.add(txtMesh);
+
+    // 整体作为mesh添加
+    this.initText(text, position);
+  }
+
+  initText(text, position) {
+    const canvas = document.createElement('canvas');
+    // canvas.width = 12;
+    // canvas.height = 12;
+    /*2、创建图形，这部分可以去看w3c canvas教程*/
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.fillStyle = '#ffffff';
+    // ctx.arc(0, 0, 50, 0, 2 * Math.PI);
+    ctx.font = 'Bold 50px Microsoft YaHei';
+    ctx.fillText(text, 10, 50);
+    ctx.fill();
+    ctx.stroke();
+    const textTexture = new THREE.CanvasTexture(canvas);
+    textTexture.minFilter = THREE.LinearFilter;
+    const textGeoMetry = new THREE.PlaneGeometry(2, 2);
+    const textPlane = new THREE.Mesh(textGeoMetry, new THREE.MeshPhongMaterial({
+      map: textTexture,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 1
+    }));
+    textPlane.rotation.x -= Math.PI / 2;
+    textPlane.scale.set(10, 10, 1);
+    textPlane.position.set(position[0], position[1] + 1, position[2]);
+    this.scene.add(textPlane);
+  }
+
+  initParMtl(text) {
+    const canvas = document.createElement('canvas');
+    // canvas.width = 12;
+    // canvas.height = 12;
+    /*2、创建图形，这部分可以去看w3c canvas教程*/
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.fillStyle = '#ffffff';
+    // ctx.arc(0, 0, 50, 0, 2 * Math.PI);
+    ctx.font = 'Bold 50px Microsoft YaHei';
+    ctx.fillText(text, 10, 50);
+    ctx.fill();
+    ctx.stroke();
+    /*3、将canvas作为纹理，创建Sprite*/
+    const texture = new THREE.Texture(canvas);
+    texture.needsUpdate = true; // 注意这句不能少
+    const particleMaterial = new THREE.SpriteMaterial({
+      color: 0xffffff,
+      map: texture,
+      // sizeAttenuation: true,
+      // size: 30,
+      transparent: true,
+      opacity: 1,
+    });
+    return particleMaterial;
+  }
+
   // 画多个区域（面）
-  initObject(size, position, bgcolor, opacity, text?) {
+  initPlant(size, position, bgcolor, opacity, textdir?, text?) {
     const geometry = new THREE.PlaneGeometry(...size);      //
     const material = new THREE.MeshLambertMaterial({       // MeshBasicMaterial 不受光照影响
       color: bgcolor,
@@ -152,7 +249,30 @@ export class TestThreeComponent implements OnInit {
     });
   }
 
-  generateLine(startVec, endVec, dir, distance) {
+  generateLine(endVec, startVec, dir) {
+    startVec = new THREE.Vector3(...startVec);
+    endVec = new THREE.Vector3(...endVec);
+    let controlVec = startVec;
+    switch (dir) {
+      case 'x':
+        controlVec = new THREE.Vector3(startVec.x, endVec.y, endVec.z);
+        break;
+      case 'y':
+        controlVec = new THREE.Vector3(endVec.x, startVec.y, endVec.z);
+        break;
+      default:
+        controlVec = new THREE.Vector3(endVec.x, endVec.y, startVec.z);
+
+    }
+    const curve = new THREE.QuadraticBezierCurve3(startVec, controlVec, endVec);
+
+    const geometry = new THREE.TubeBufferGeometry(curve, 50, 1, 12, false);
+    this.change2LightTrail(geometry);
+  }
+
+  generateVLine(endVec, startVec, dir, distance) {
+    startVec = new THREE.Vector3(...startVec);
+    endVec = new THREE.Vector3(...endVec);
     let controlVec = startVec;
     let controlVecTwo = endVec;
     switch (dir) {
@@ -172,6 +292,7 @@ export class TestThreeComponent implements OnInit {
         if (!this.distanceJudge(startVec.y, endVec.y, distance)) {
           break;
         }
+        startVec.y += 1;
         if (startVec.y > endVec.y) {
           controlVec = new THREE.Vector3(startVec.x, startVec.y - distance, startVec.z);
           controlVecTwo = new THREE.Vector3(endVec.x, endVec.y + distance, endVec.z);
@@ -195,7 +316,7 @@ export class TestThreeComponent implements OnInit {
     // const curve = new THREE.QuadraticBezierCurve3(startVec, controlVec, endVec);
     const curve = new THREE.CubicBezierCurve3(startVec, controlVec, controlVecTwo, endVec);
 
-    const geometry = new THREE.TubeBufferGeometry(curve, 20, 5, 8, false);
+    const geometry = new THREE.TubeBufferGeometry(curve, 50, 1, 12, false);
     this.change2LightTrail(geometry);
   }
 
